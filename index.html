@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>法人化判定ツール</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    input[type="number"] { -moz-appearance: textfield; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .yen-input { ime-mode: disabled; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Meiryo"', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen font-sans">
+
+  <header class="bg-white shadow-sm border-b border-slate-200">
+    <div class="max-w-5xl mx-auto px-4 py-5">
+      <h1 class="text-2xl md:text-3xl font-bold text-slate-800">法人化判定ツール</h1>
+      <p class="text-sm text-slate-500 mt-1">個人事業 vs 法人化の税負担・手取りを比較シミュレーション</p>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-8">
+
+    <div id="errorArea" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm space-y-1"></div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 mb-8">
+      <h2 class="text-xl font-bold text-slate-800 mb-6">入力条件</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+
+        <div class="space-y-5">
+          <h3 class="text-lg font-bold text-slate-800 mb-4 pb-2 border-b-2 border-slate-200">基本情報</h3>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">年間売上</label>
+            <div class="relative">
+              <input type="text" id="sales" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">円</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">必要経費（年額）</label>
+            <div class="relative">
+              <input type="text" id="expenses" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">円</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">青色申告特別控除</label>
+            <select id="blueReturnDeduction" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-right font-mono pr-8">
+              <option value="650000">65万円（e-Tax電子申告）</option>
+              <option value="550000">55万円（複式簿記）</option>
+              <option value="100000">10万円（簡易簿記）</option>
+              <option value="0">なし（白色申告）</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">個人事業の事業所得から控除されます（法人化後は適用なし）</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">所得控除額（概算）
+              <span class="text-xs text-gray-400 ml-1">基礎控除・配偶者控除・社保控除等の合計</span>
+            </label>
+            <div class="relative">
+              <input type="text" id="deductionsPersonal" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">円</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">年齢</label>
+            <input type="number" id="age" class="w-24 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-center" min="18" max="99">
+            <span class="text-sm text-gray-500 ml-2">歳（40〜64歳は介護保険料が加算）</span>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="isTaxableBusiness" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked>
+            <label for="isTaxableBusiness" class="text-sm font-medium text-gray-700">個人事業税の対象業種</label>
+          </div>
+        </div>
+
+        <div class="space-y-5">
+          <h3 class="text-lg font-bold text-slate-800 mb-4 pb-2 border-b-2 border-slate-200">法人化後の想定</h3>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">役員報酬（年額）</label>
+            <div class="relative">
+              <input type="text" id="directorSalaryAnnual" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">円</span>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">月額 × 12 で入力してください</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">法人化による追加コスト（年額）</label>
+            <p class="text-xs text-gray-400 mb-1">個人事業にはなく、法人化で新たに発生する費用</p>
+            <div class="relative">
+              <input type="text" id="corpMaintenanceCost" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">円</span>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <details class="group">
+              <summary class="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-800 transition">
+                社保・国保を手動入力する（任意）
+              </summary>
+              <div class="mt-4 space-y-4 pl-2 border-l-2 border-blue-100">
+                <p class="text-xs text-gray-500">空欄の場合は概算で自動計算します</p>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">【個人】国保 + 国民年金（年額）</label>
+                  <div class="relative">
+                    <input type="text" id="nationalInsuranceManual" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8 text-sm">
+                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">円</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">【法人】社会保険 本人負担（年額）</label>
+                  <div class="relative">
+                    <input type="text" id="socialInsEmployeeManual" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8 text-sm">
+                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">円</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">【法人】社会保険 会社負担（年額）</label>
+                  <div class="relative">
+                    <input type="text" id="socialInsEmployerManual" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8 text-sm">
+                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">円</span>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-8 text-center">
+        <button id="calcBtn" class="px-10 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition transform hover:-translate-y-0.5">
+          シミュレーション実行
+        </button>
+      </div>
+    </div>
+
+    <div id="resultArea" class="hidden space-y-8">
+      <div id="judgementBanner"></div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h3 class="text-lg font-bold text-slate-800 mb-4">判定の主な理由</h3>
+        <div id="reasonsList" class="space-y-3"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-700 text-sm font-bold">個</span>
+            <h3 class="text-lg font-bold text-slate-800">個人事業のまま</h3>
+          </div>
+          <table class="w-full text-sm"><tbody id="tblPersonal"></tbody></table>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">法</span>
+            <h3 class="text-lg font-bold text-slate-800">法人化後（個人側）</h3>
+          </div>
+          <table class="w-full text-sm"><tbody id="tblCorporatePersonal"></tbody></table>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold">社</span>
+          <h3 class="text-lg font-bold text-slate-800">法人側（会社の損益・法人税等）</h3>
+        </div>
+        <table class="w-full text-sm max-w-2xl"><tbody id="tblCorporateCorp"></tbody></table>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800">
+        <h4 class="font-bold mb-2">ご注意事項</h4>
+        <ul class="space-y-1 list-disc list-inside">
+          <li>本ツールは概算シミュレーションです。実際の法人化判断には個別の詳細試算が必要です。</li>
+          <li>税率は2026年度の標準税率（概算）を使用しています。自治体や業種により異なる場合があります。</li>
+          <li>社会保険料は協会けんぽ（東京都）の概算料率で計算しています。</li>
+          <li>消費税の影響は本シミュレーションに含まれていません。</li>
+          <li>法人住民税の均等割は資本金1,000万円以下・従業員50人以下の最低ランクで計算しています。</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <footer class="mt-16 py-6 bg-white border-t border-slate-200">
+    <div class="max-w-5xl mx-auto px-4 text-center text-sm text-gray-400">
+      法人化判定ツール MVP版 &mdash; 概算シミュレーション用
+    </div>
+  </footer>
+
+<script>
+// ============================================================
+// 税率テーブル（2026年度 MVP版）
+// ============================================================
+const TAX_TABLES = {
+  2026: {
+    incomeTaxBrackets: [
+      { upper: 1950000, rate: 0.05, deduction: 0 },
+      { upper: 3300000, rate: 0.10, deduction: 97500 },
+      { upper: 6950000, rate: 0.20, deduction: 427500 },
+      { upper: 9000000, rate: 0.23, deduction: 636000 },
+      { upper: 18000000, rate: 0.33, deduction: 1536000 },
+      { upper: 40000000, rate: 0.40, deduction: 2796000 },
+      { upper: Infinity, rate: 0.45, deduction: 4796000 },
+    ],
+    reconstructionTaxRate: 0.021,
+    residentTax: { incomeRate: 0.10, capitaAmount: 5000 },
+    soleProprietorTax: { deduction: 2900000, rate: 0.05 },
+    salaryDeductionBrackets: [
+      { upper: 1625000, rate: 0, fixed: 550000 },
+      { upper: 1800000, rate: 0.40, base: -100000 },
+      { upper: 3600000, rate: 0.30, base: 80000 },
+      { upper: 6600000, rate: 0.20, base: 440000 },
+      { upper: 8500000, rate: 0.10, base: 1100000 },
+      { upper: Infinity, rate: 0, fixed: 1950000 },
+    ],
+    corporateTax: { lightThreshold: 8000000, lightRate: 0.15, normalRate: 0.232 },
+    localCorporateTaxRate: 0.104,
+    corporateResidentTax: { incomeRate: 0.070, capitaAmount: 70000 },
+    corporateBusinessTax: {
+      brackets: [
+        { upper: 4000000, rate: 0.035 },
+        { upper: 8000000, rate: 0.053 },
+        { upper: Infinity, rate: 0.070 },
+      ],
+    },
+    specialCorporateBusinessTaxRate: 0.37,
+    socialInsurance: {
+      healthInsuranceRate: 0.0998,
+      nursingCareRate: 0.0160,
+      pensionRate: 0.1830,
+      nursingCareAgeMin: 40,
+      nursingCareAgeMax: 64,
+      healthMaxMonthly: 1390000,
+      pensionMaxMonthly: 650000,
+    },
+    nationalPension: { monthlyAmount: 17510 },
+  },
+};
+
+function getTaxTable(year) { return TAX_TABLES[year || 2026] || TAX_TABLES[2026]; }
+
+// ============================================================
+// 個人事業の計算
+// ============================================================
+function calcIncomeTax(taxableIncome, table) {
+  if (taxableIncome <= 0) return 0;
+  var bracket = table.incomeTaxBrackets.find(function(b) { return taxableIncome <= b.upper; });
+  return Math.floor(taxableIncome * bracket.rate - bracket.deduction);
+}
+
+function calcPersonal(params) {
+  var t = getTaxTable(params.fiscalYear);
+  var bizIncomeBeforeBlue = params.sales - params.expenses;
+  var blueDeduction = Math.min(params.blueReturnDeduction || 0, Math.max(bizIncomeBeforeBlue, 0));
+  var bizIncome = Math.max(bizIncomeBeforeBlue - blueDeduction, 0);
+
+  var soleProprietorTax = 0;
+  if (params.isTaxableBusiness) {
+    var base = Math.max(bizIncome - t.soleProprietorTax.deduction, 0);
+    soleProprietorTax = Math.floor(base * t.soleProprietorTax.rate);
+  }
+
+  var taxableIncome = Math.max(bizIncome - params.deductionsPersonal, 0);
+  var incomeTaxBase = calcIncomeTax(taxableIncome, t);
+  var reconstructionTax = Math.floor(incomeTaxBase * t.reconstructionTaxRate);
+  var incomeTaxTotal = incomeTaxBase + reconstructionTax;
+
+  var residentTaxIncome = Math.floor(Math.max(taxableIncome, 0) * t.residentTax.incomeRate);
+  var residentTaxCapita = t.residentTax.capitaAmount;
+  var residentTaxTotal = residentTaxIncome + residentTaxCapita;
+
+  var nationalInsTotal;
+  if (params.nationalInsuranceManual > 0) {
+    nationalInsTotal = params.nationalInsuranceManual;
+  } else {
+    var nenkin = t.nationalPension.monthlyAmount * 12;
+    var kokuhoEstimate = Math.floor(Math.max(bizIncome - 430000, 0) * 0.10);
+    nationalInsTotal = nenkin + Math.min(kokuhoEstimate, 1060000);
+  }
+
+  var takehome = bizIncome - incomeTaxTotal - residentTaxTotal - soleProprietorTax - nationalInsTotal;
+
+  return {
+    bizIncomeBeforeBlue: bizIncomeBeforeBlue, blueDeduction: blueDeduction,
+    bizIncome: bizIncome, taxableIncome: taxableIncome,
+    incomeTaxBase: incomeTaxBase, reconstructionTax: reconstructionTax, incomeTaxTotal: incomeTaxTotal,
+    residentTaxIncome: residentTaxIncome, residentTaxCapita: residentTaxCapita, residentTaxTotal: residentTaxTotal,
+    soleProprietorTax: soleProprietorTax, nationalInsTotal: nationalInsTotal, takehome: takehome,
+  };
+}
+
+// ============================================================
+// 給与所得控除
+// ============================================================
+function calcSalaryDeduction(annualSalary, table) {
+  if (annualSalary <= 0) return 0;
+  for (var i = 0; i < table.salaryDeductionBrackets.length; i++) {
+    var b = table.salaryDeductionBrackets[i];
+    if (annualSalary <= b.upper) {
+      if (b.fixed != null) return b.fixed;
+      return Math.floor(annualSalary * b.rate + b.base);
+    }
+  }
+  return 1950000;
+}
+
+// ============================================================
+// 社会保険料（協会けんぽ概算）
+// ============================================================
+function calcSocialInsurance(annualSalary, age, fiscalYear) {
+  var t = getTaxTable(fiscalYear);
+  var si = t.socialInsurance;
+  var monthlySalary = Math.floor(annualSalary / 12);
+
+  var healthMonthly = Math.min(monthlySalary, si.healthMaxMonthly);
+  var healthRate = si.healthInsuranceRate;
+  if (age >= si.nursingCareAgeMin && age <= si.nursingCareAgeMax) {
+    healthRate += si.nursingCareRate;
+  }
+  var healthAnnual = Math.floor(healthMonthly * healthRate) * 12;
+
+  var pensionMonthly = Math.min(monthlySalary, si.pensionMaxMonthly);
+  var pensionAnnual = Math.floor(pensionMonthly * si.pensionRate) * 12;
+
+  var total = healthAnnual + pensionAnnual;
+  return {
+    employee: Math.floor(total / 2),
+    employer: total - Math.floor(total / 2),
+    total: total,
+  };
+}
+
+// ============================================================
+// 法人税等（地方法人税含む全内訳）
+// ============================================================
+function calcCorpTaxBase(taxableIncome, corpTaxTable) {
+  if (taxableIncome <= 0) return 0;
+  if (taxableIncome <= corpTaxTable.lightThreshold) {
+    return Math.floor(taxableIncome * corpTaxTable.lightRate);
+  }
+  return Math.floor(
+    corpTaxTable.lightThreshold * corpTaxTable.lightRate +
+    (taxableIncome - corpTaxTable.lightThreshold) * corpTaxTable.normalRate
+  );
+}
+
+function calcCorpBusinessTax(taxableIncome, brackets) {
+  if (taxableIncome <= 0) return 0;
+  var tax = 0, remaining = taxableIncome, prevUpper = 0;
+  for (var i = 0; i < brackets.length; i++) {
+    var b = brackets[i];
+    var width = Math.min(remaining, b.upper - prevUpper);
+    if (width <= 0) break;
+    tax += width * b.rate;
+    remaining -= width;
+    prevUpper = b.upper;
+  }
+  return Math.floor(tax);
+}
+
+function calcCorporateTaxes(profitBeforeTax, fiscalYear) {
+  var t = getTaxTable(fiscalYear);
+  var taxableIncome = Math.max(profitBeforeTax, 0);
+
+  var corpTax = calcCorpTaxBase(taxableIncome, t.corporateTax);
+  var localCorpTax = Math.floor(corpTax * t.localCorporateTaxRate);
+  var corpResidentTaxIncome = Math.floor(corpTax * t.corporateResidentTax.incomeRate);
+  var corpResidentTaxCapita = t.corporateResidentTax.capitaAmount;
+  var corpResidentTaxTotal = corpResidentTaxIncome + corpResidentTaxCapita;
+  var corpBusinessTax = calcCorpBusinessTax(taxableIncome, t.corporateBusinessTax.brackets);
+  var specialCorpBusinessTax = Math.floor(corpBusinessTax * t.specialCorporateBusinessTaxRate);
+  var totalTax = corpTax + localCorpTax + corpResidentTaxTotal + corpBusinessTax + specialCorpBusinessTax;
+
+  return {
+    corpTax: corpTax, localCorpTax: localCorpTax,
+    corpResidentTaxIncome: corpResidentTaxIncome,
+    corpResidentTaxCapita: corpResidentTaxCapita,
+    corpResidentTaxTotal: corpResidentTaxTotal,
+    corpBusinessTax: corpBusinessTax,
+    specialCorpBusinessTax: specialCorpBusinessTax,
+    totalTax: totalTax,
+  };
+}
+
+// ============================================================
+// 法人化ケース総合計算
+// ============================================================
+function calcCorporate(params) {
+  var t = getTaxTable(params.fiscalYear);
+
+  var socialIns;
+  if (params.socialInsEmployeeManual > 0 && params.socialInsEmployerManual > 0) {
+    socialIns = {
+      employee: params.socialInsEmployeeManual,
+      employer: params.socialInsEmployerManual,
+      total: params.socialInsEmployeeManual + params.socialInsEmployerManual,
+    };
+  } else {
+    socialIns = calcSocialInsurance(params.directorSalaryAnnual, params.age, params.fiscalYear);
+  }
+
+  var salaryDed = calcSalaryDeduction(params.directorSalaryAnnual, t);
+  var salaryIncome = Math.max(params.directorSalaryAnnual - salaryDed, 0);
+  var taxableIncomeAfter = Math.max(salaryIncome - params.deductionsPersonal, 0);
+
+  var incomeTaxAfterBase = calcIncomeTax(taxableIncomeAfter, t);
+  var reconstructionTaxAfter = Math.floor(incomeTaxAfterBase * t.reconstructionTaxRate);
+  var incomeTaxAfterTotal = incomeTaxAfterBase + reconstructionTaxAfter;
+
+  var residentTaxAfterIncome = Math.floor(Math.max(taxableIncomeAfter, 0) * t.residentTax.incomeRate);
+  var residentTaxAfterCapita = t.residentTax.capitaAmount;
+  var residentTaxAfterTotal = residentTaxAfterIncome + residentTaxAfterCapita;
+
+  var profitBeforeTax = (params.sales - params.expenses) - params.directorSalaryAnnual - params.corpMaintenanceCost - socialIns.employer;
+  var corpTaxBreakdown = calcCorporateTaxes(profitBeforeTax, params.fiscalYear);
+  var profitAfterTax = profitBeforeTax - corpTaxBreakdown.totalTax;
+  var personalTakehomeAfter = params.directorSalaryAnnual - incomeTaxAfterTotal - residentTaxAfterTotal - socialIns.employee;
+  var combinedCash = personalTakehomeAfter + profitAfterTax;
+
+  return {
+    salaryIncome: salaryIncome, salaryDeduction: salaryDed,
+    taxableIncomeAfter: taxableIncomeAfter,
+    incomeTaxAfterBase: incomeTaxAfterBase, reconstructionTaxAfter: reconstructionTaxAfter,
+    incomeTaxAfterTotal: incomeTaxAfterTotal,
+    residentTaxAfterIncome: residentTaxAfterIncome, residentTaxAfterCapita: residentTaxAfterCapita,
+    residentTaxAfterTotal: residentTaxAfterTotal,
+    socialInsEmployee: socialIns.employee, socialInsEmployer: socialIns.employer, socialInsTotal: socialIns.total,
+    profitBeforeTax: profitBeforeTax, corpTaxBreakdown: corpTaxBreakdown,
+    profitAfterTax: profitAfterTax, personalTakehomeAfter: personalTakehomeAfter, combinedCash: combinedCash,
+    directorSalaryAnnual: params.directorSalaryAnnual, corpMaintenanceCost: params.corpMaintenanceCost,
+  };
+}
+
+// ============================================================
+// 比較・判定
+// ============================================================
+function compare(personalResult, corporateResult) {
+  return {
+    diffTakehome: corporateResult.personalTakehomeAfter - personalResult.takehome,
+    diffCombined: corporateResult.combinedCash - personalResult.takehome,
+  };
+}
+
+function buildJudgement(personalResult, corporateResult, comparison) {
+  var diffCombined = comparison.diffCombined;
+  var rank;
+  if (diffCombined >= 300000) rank = 'RECOMMENDED';
+  else if (diffCombined <= -300000) rank = 'NOT_YET';
+  else rank = 'BORDERLINE';
+
+  var factors = [];
+
+  var deltaIncomeTax = personalResult.incomeTaxTotal - corporateResult.incomeTaxAfterTotal;
+  factors.push({
+    label: '所得税の差', amount: deltaIncomeTax,
+    description: deltaIncomeTax > 0
+      ? '法人化で所得税が年間 ' + fmtAbs(deltaIncomeTax) + ' 軽減'
+      : '法人化で所得税が年間 ' + fmtAbs(deltaIncomeTax) + ' 増加',
+  });
+
+  var deltaResidentTax = personalResult.residentTaxTotal - corporateResult.residentTaxAfterTotal;
+  factors.push({
+    label: '住民税の差', amount: deltaResidentTax,
+    description: deltaResidentTax > 0
+      ? '法人化で住民税が年間 ' + fmtAbs(deltaResidentTax) + ' 軽減'
+      : '法人化で住民税が年間 ' + fmtAbs(deltaResidentTax) + ' 増加',
+  });
+
+  var deltaSocialIns = personalResult.nationalInsTotal - (corporateResult.socialInsEmployee + corporateResult.socialInsEmployer);
+  factors.push({
+    label: '社会保険料の差（国保年金 vs 社保）', amount: deltaSocialIns,
+    description: deltaSocialIns > 0
+      ? '法人化で社保負担が年間 ' + fmtAbs(deltaSocialIns) + ' 軽減'
+      : '法人化で社保負担（会社+本人）が年間 ' + fmtAbs(deltaSocialIns) + ' 増加',
+  });
+
+  var corpTaxTotal = corporateResult.corpTaxBreakdown.totalTax;
+  factors.push({
+    label: '法人税等の負担', amount: -corpTaxTotal,
+    description: '法人税等（地方法人税含む）が年間 ' + fmtAbs(corpTaxTotal),
+  });
+
+  if (personalResult.soleProprietorTax > 0) {
+    factors.push({
+      label: '個人事業税の削減', amount: personalResult.soleProprietorTax,
+      description: '法人化で個人事業税 ' + fmtAbs(personalResult.soleProprietorTax) + ' がなくなる',
+    });
+  }
+
+  if (personalResult.blueDeduction > 0) {
+    factors.push({
+      label: '青色申告特別控除の消失', amount: -personalResult.blueDeduction,
+      description: '法人化で青色申告特別控除 ' + fmtAbs(personalResult.blueDeduction) + ' が使えなくなる（代わりに給与所得控除が適用）',
+    });
+  }
+
+  if (corporateResult.corpMaintenanceCost > 0) {
+    factors.push({
+      label: '法人維持コスト', amount: -corporateResult.corpMaintenanceCost,
+      description: '法人化で年間 ' + fmtAbs(corporateResult.corpMaintenanceCost) + ' の維持コストが発生',
+    });
+  }
+
+  if (corporateResult.profitAfterTax > 0) {
+    factors.push({
+      label: '内部留保（会社に残る利益）', amount: corporateResult.profitAfterTax,
+      description: '法人に年間 ' + fmtAbs(corporateResult.profitAfterTax) + ' の利益を蓄積可能',
+    });
+  }
+
+  factors.sort(function(a, b) { return Math.abs(b.amount) - Math.abs(a.amount); });
+  return { rank: rank, topReasons: factors.slice(0, 3), allFactors: factors };
+}
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+function fmt(n) {
+  if (n == null || isNaN(n)) return '0円';
+  return Math.round(n).toLocaleString('ja-JP') + '円';
+}
+function fmtAbs(n) {
+  return Math.abs(Math.round(n)).toLocaleString('ja-JP') + '円';
+}
+function fmtDiff(n) {
+  if (n > 0) return '+' + fmt(n);
+  if (n < 0) return fmt(n);
+  return '±0円';
+}
+
+// ============================================================
+// カンマ区切りフォーマット（入力フィールド用）
+// ============================================================
+function parseNumericInput(str) {
+  if (!str) return 0;
+  var cleaned = String(str).replace(/,/g, '').replace(/[^\d.-]/g, '');
+  var val = parseFloat(cleaned);
+  return isNaN(val) ? 0 : val;
+}
+
+function toCommaString(num) {
+  if (num === 0 || isNaN(num)) return '';
+  return Math.round(num).toLocaleString('ja-JP');
+}
+
+function setupYenInput(el) {
+  el.addEventListener('focus', function() {
+    var raw = parseNumericInput(el.value);
+    el.value = raw > 0 ? String(raw) : '';
+  });
+
+  el.addEventListener('blur', function() {
+    var raw = parseNumericInput(el.value);
+    el.value = toCommaString(raw);
+  });
+
+  el.addEventListener('keydown', function(e) {
+    var allowed = ['Backspace','Delete','Tab','Escape','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+    if (allowed.indexOf(e.key) !== -1) return;
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'z')) return;
+    if (!/[\d,]/.test(e.key)) {
+      e.preventDefault();
+    }
+  });
+
+  el.addEventListener('paste', function(e) {
+    e.preventDefault();
+    var pasted = (e.clipboardData || window.clipboardData).getData('text');
+    var num = parseNumericInput(pasted);
+    el.value = num > 0 ? String(num) : '';
+  });
+}
+
+// ============================================================
+// 入力取得・バリデーション
+// ============================================================
+function getVal(id) {
+  var el = document.getElementById(id);
+  return parseNumericInput(el.value);
+}
+
+function getInputParams() {
+  return {
+    sales: getVal('sales'),
+    expenses: getVal('expenses'),
+    blueReturnDeduction: parseInt(document.getElementById('blueReturnDeduction').value) || 0,
+    deductionsPersonal: getVal('deductionsPersonal'),
+    directorSalaryAnnual: getVal('directorSalaryAnnual'),
+    corpMaintenanceCost: getVal('corpMaintenanceCost'),
+    age: getVal('age'),
+    isTaxableBusiness: document.getElementById('isTaxableBusiness').checked,
+    nationalInsuranceManual: getVal('nationalInsuranceManual'),
+    socialInsEmployeeManual: getVal('socialInsEmployeeManual'),
+    socialInsEmployerManual: getVal('socialInsEmployerManual'),
+    fiscalYear: 2026,
+  };
+}
+
+function validateInputs(params) {
+  var errors = [];
+  if (params.sales <= 0) errors.push('年間売上を入力してください');
+  if (params.directorSalaryAnnual <= 0) errors.push('役員報酬（年額）を入力してください');
+  if (params.age <= 0 || params.age > 100) errors.push('年齢を正しく入力してください');
+  return errors;
+}
+
+// ============================================================
+// レンダリング
+// ============================================================
+function getRankDisplay(rank) {
+  switch (rank) {
+    case 'RECOMMENDED': return { label: '法人化が有利な可能性が高い', color: 'bg-green-100 text-green-800 border-green-300', icon: '&#10003;', badgeColor: 'bg-green-600' };
+    case 'NOT_YET': return { label: 'まだ法人化は早い可能性', color: 'bg-red-100 text-red-800 border-red-300', icon: '&times;', badgeColor: 'bg-red-600' };
+    default: return { label: '条件次第（ボーダーライン）', color: 'bg-yellow-100 text-yellow-800 border-yellow-300', icon: '&#9651;', badgeColor: 'bg-yellow-600' };
+  }
+}
+
+function renderResults(personal, corporate, comp, judgement) {
+  var resultArea = document.getElementById('resultArea');
+  resultArea.classList.remove('hidden');
+
+  var rd = getRankDisplay(judgement.rank);
+  document.getElementById('judgementBanner').innerHTML =
+    '<div class="p-6 rounded-xl border-2 ' + rd.color + '">' +
+    '<div class="flex items-center gap-3 mb-3">' +
+    '<span class="inline-flex items-center justify-center w-10 h-10 rounded-full text-white text-xl font-bold ' + rd.badgeColor + '">' + rd.icon + '</span>' +
+    '<h3 class="text-2xl font-bold">' + rd.label + '</h3></div>' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+    '<div class="bg-white/60 rounded-lg p-4"><div class="text-sm text-gray-600">個人手取りベースの差額</div><div class="text-xl font-bold mt-1">' + fmtDiff(comp.diffTakehome) + '/年</div></div>' +
+    '<div class="bg-white/60 rounded-lg p-4"><div class="text-sm text-gray-600">合算キャッシュベースの差額（内部留保含む）</div><div class="text-xl font-bold mt-1">' + fmtDiff(comp.diffCombined) + '/年</div></div>' +
+    '</div></div>';
+
+  var reasonsHtml = '';
+  for (var i = 0; i < judgement.topReasons.length; i++) {
+    var r = judgement.topReasons[i];
+    reasonsHtml +=
+      '<div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">' +
+      '<span class="flex-shrink-0 w-7 h-7 rounded-full bg-slate-700 text-white text-sm font-bold flex items-center justify-center">' + (i + 1) + '</span>' +
+      '<div><div class="font-semibold text-sm">' + r.label + '</div><div class="text-sm text-gray-600 mt-0.5">' + r.description + '</div></div></div>';
+  }
+  document.getElementById('reasonsList').innerHTML = reasonsHtml;
+
+  var cb = corporate.corpTaxBreakdown;
+
+  var blueRow = personal.blueDeduction > 0
+    ? '<tr><td class="pr-4 py-1.5 pl-4">青色申告特別控除</td><td class="text-right font-mono text-green-700">-' + fmt(personal.blueDeduction) + '</td></tr>'
+    : '';
+
+  document.getElementById('tblPersonal').innerHTML =
+    '<tr><td class="pr-4 py-1.5">売上 - 経費</td><td class="text-right font-mono">' + fmt(personal.bizIncomeBeforeBlue) + '</td></tr>' +
+    blueRow +
+    '<tr class="font-semibold"><td class="pr-4 py-1.5">事業所得</td><td class="text-right font-mono">' + fmt(personal.bizIncome) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5">課税所得</td><td class="text-right font-mono">' + fmt(personal.taxableIncome) + '</td></tr>' +
+    '<tr class="border-t"><td class="pr-4 py-1.5 pl-4">所得税</td><td class="text-right font-mono text-red-700">' + fmt(personal.incomeTaxTotal) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-8 text-xs text-gray-500">（うち復興特別所得税）</td><td class="text-right font-mono text-xs text-gray-500">' + fmt(personal.reconstructionTax) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">住民税</td><td class="text-right font-mono text-red-700">' + fmt(personal.residentTaxTotal) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">個人事業税</td><td class="text-right font-mono text-red-700">' + fmt(personal.soleProprietorTax) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">国保・国民年金</td><td class="text-right font-mono text-red-700">' + fmt(personal.nationalInsTotal) + '</td></tr>' +
+    '<tr class="border-t-2 border-slate-400 font-bold text-lg"><td class="pr-4 py-2">手取り</td><td class="text-right font-mono text-blue-700">' + fmt(personal.takehome) + '</td></tr>';
+
+  document.getElementById('tblCorporatePersonal').innerHTML =
+    '<tr><td class="pr-4 py-1.5">役員報酬（年額）</td><td class="text-right font-mono">' + fmt(corporate.directorSalaryAnnual) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">給与所得控除</td><td class="text-right font-mono text-green-700">-' + fmt(corporate.salaryDeduction) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5">給与所得</td><td class="text-right font-mono">' + fmt(corporate.salaryIncome) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5">課税所得</td><td class="text-right font-mono">' + fmt(corporate.taxableIncomeAfter) + '</td></tr>' +
+    '<tr class="border-t"><td class="pr-4 py-1.5 pl-4">所得税</td><td class="text-right font-mono text-red-700">' + fmt(corporate.incomeTaxAfterTotal) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">住民税</td><td class="text-right font-mono text-red-700">' + fmt(corporate.residentTaxAfterTotal) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">社会保険（本人負担）</td><td class="text-right font-mono text-red-700">' + fmt(corporate.socialInsEmployee) + '</td></tr>' +
+    '<tr class="border-t-2 border-slate-400 font-bold text-lg"><td class="pr-4 py-2">個人の手取り</td><td class="text-right font-mono text-blue-700">' + fmt(corporate.personalTakehomeAfter) + '</td></tr>';
+
+  document.getElementById('tblCorporateCorp').innerHTML =
+    '<tr><td class="pr-4 py-1.5">売上 - 経費</td><td class="text-right font-mono">' + fmt(personal.bizIncome) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">役員報酬</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.directorSalaryAnnual) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">法人維持コスト</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.corpMaintenanceCost) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">社会保険（会社負担）</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.socialInsEmployer) + '</td></tr>' +
+    '<tr class="border-t font-semibold"><td class="pr-4 py-1.5">税引前利益</td><td class="text-right font-mono">' + fmt(corporate.profitBeforeTax) + '</td></tr>' +
+    '<tr class="border-t bg-slate-50"><td colspan="2" class="pr-4 py-2 font-semibold text-slate-700">法人税等 内訳</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">法人税（国税）</td><td class="text-right font-mono text-red-700">' + fmt(cb.corpTax) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">地方法人税（国税）</td><td class="text-right font-mono text-red-700">' + fmt(cb.localCorpTax) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">法人住民税（法人税割）</td><td class="text-right font-mono text-red-700">' + fmt(cb.corpResidentTaxIncome) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">法人住民税（均等割）</td><td class="text-right font-mono text-red-700">' + fmt(cb.corpResidentTaxCapita) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">法人事業税</td><td class="text-right font-mono text-red-700">' + fmt(cb.corpBusinessTax) + '</td></tr>' +
+    '<tr><td class="pr-4 py-1.5 pl-4">特別法人事業税</td><td class="text-right font-mono text-red-700">' + fmt(cb.specialCorpBusinessTax) + '</td></tr>' +
+    '<tr class="border-t font-semibold"><td class="pr-4 py-1.5 pl-4">法人税等 合計</td><td class="text-right font-mono text-red-700">' + fmt(cb.totalTax) + '</td></tr>' +
+    '<tr class="border-t-2 border-slate-400 font-bold text-lg"><td class="pr-4 py-2">税引後利益（内部留保）</td><td class="text-right font-mono text-blue-700">' + fmt(corporate.profitAfterTax) + '</td></tr>' +
+    '<tr class="bg-blue-50 font-bold text-lg"><td class="pr-4 py-2">合算キャッシュ</td><td class="text-right font-mono text-blue-900">' + fmt(corporate.combinedCash) + '</td></tr>';
+
+  resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================
+// メイン
+// ============================================================
+function calculate() {
+  var errorArea = document.getElementById('errorArea');
+  errorArea.innerHTML = '';
+  errorArea.classList.add('hidden');
+
+  var params = getInputParams();
+  var errors = validateInputs(params);
+  if (errors.length > 0) {
+    errorArea.classList.remove('hidden');
+    errorArea.innerHTML = errors.map(function(e) { return '<div class="flex items-center gap-2"><span class="text-red-500 font-bold">!</span> ' + e + '</div>'; }).join('');
+    return;
+  }
+
+  var personal = calcPersonal(params);
+  var corporate = calcCorporate(params);
+  var comp = compare(personal, corporate);
+  var judgement = buildJudgement(personal, corporate, comp);
+  renderResults(personal, corporate, comp, judgement);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // 全金額フィールドにカンマ区切りイベントを設定
+  var yenFields = document.querySelectorAll('.yen-input');
+  for (var i = 0; i < yenFields.length; i++) {
+    setupYenInput(yenFields[i]);
+  }
+
+  // デフォルト値をカンマ付きで表示
+  var defaults = {
+    sales: 12000000, expenses: 2000000, deductionsPersonal: 1500000,
+    directorSalaryAnnual: 6000000, corpMaintenanceCost: 400000, age: 45,
+  };
+  for (var id in defaults) {
+    var el = document.getElementById(id);
+    if (el && !el.value) {
+      if (el.classList.contains('yen-input')) {
+        el.value = toCommaString(defaults[id]);
+      } else {
+        el.value = defaults[id];
+      }
+    }
+  }
+
+  document.getElementById('calcBtn').addEventListener('click', calculate);
+});
+</script>
+</body>
+</html>
