@@ -116,6 +116,22 @@
             </div>
           </div>
 
+          <div class="mt-2 p-4 bg-blue-50 rounded-lg border border-blue-100">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" id="isRentingHome" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
+              <label for="isRentingHome" class="text-sm font-medium text-gray-700">代表が賃貸住宅に住んでいる</label>
+            </div>
+            <p class="text-xs text-gray-500 mt-1.5 ml-8">法人化後に役員社宅制度を活用し、家賃の約50%を法人経費にできます</p>
+            <div id="rentInputArea" class="hidden mt-3 ml-8">
+              <label class="block text-xs font-medium text-gray-600 mb-1">月額家賃</label>
+              <div class="relative max-w-xs">
+                <input type="text" id="monthlyRent" inputmode="numeric" class="yen-input w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-right font-mono pr-8">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">円</span>
+              </div>
+              <p class="text-xs text-gray-400 mt-1">役員社宅制度により、家賃の約50%が法人の損金に。社長の自己負担は約50%で、差額分は給与課税されません。</p>
+            </div>
+          </div>
+
           <div class="mt-6">
             <details class="group">
               <summary class="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-800 transition">
@@ -433,10 +449,19 @@ function calcCorporate(params) {
   var residentTaxAfterCapita = t.residentTax.capitaAmount;
   var residentTaxAfterTotal = residentTaxAfterIncome + residentTaxAfterCapita;
 
-  var profitBeforeTax = (params.sales - params.expenses) - params.directorSalaryAnnual - params.corpMaintenanceCost - socialIns.employer;
+  // 役員社宅制度の計算
+  var annualRent = params.monthlyRent * 12;
+  var companyRentExpense = 0;
+  var personalRentSaving = 0;
+  if (params.isRentingHome && annualRent > 0) {
+    companyRentExpense = Math.floor(annualRent * 0.5);
+    personalRentSaving = companyRentExpense;
+  }
+
+  var profitBeforeTax = (params.sales - params.expenses) - params.directorSalaryAnnual - params.corpMaintenanceCost - socialIns.employer - companyRentExpense;
   var corpTaxBreakdown = calcCorporateTaxes(profitBeforeTax, params.fiscalYear);
   var profitAfterTax = profitBeforeTax - corpTaxBreakdown.totalTax;
-  var personalTakehomeAfter = params.directorSalaryAnnual - incomeTaxAfterTotal - residentTaxAfterTotal - socialIns.employee;
+  var personalTakehomeAfter = params.directorSalaryAnnual - incomeTaxAfterTotal - residentTaxAfterTotal - socialIns.employee + personalRentSaving;
   var combinedCash = personalTakehomeAfter + profitAfterTax;
 
   return {
@@ -450,6 +475,7 @@ function calcCorporate(params) {
     profitBeforeTax: profitBeforeTax, corpTaxBreakdown: corpTaxBreakdown,
     profitAfterTax: profitAfterTax, personalTakehomeAfter: personalTakehomeAfter, combinedCash: combinedCash,
     directorSalaryAnnual: params.directorSalaryAnnual, corpMaintenanceCost: params.corpMaintenanceCost,
+    companyRentExpense: companyRentExpense, personalRentSaving: personalRentSaving, annualRent: annualRent,
   };
 }
 
@@ -530,6 +556,13 @@ function buildJudgement(personalResult, corporateResult, comparison) {
     });
   }
 
+  if (corporateResult.companyRentExpense > 0) {
+    factors.push({
+      label: '役員社宅制度の活用', amount: corporateResult.companyRentExpense,
+      description: '役員社宅制度により家賃の50%（年間 ' + fmtAbs(corporateResult.companyRentExpense) + '）を法人経費にでき、社長の実質手取りも同額増加（給与課税なし）',
+    });
+  }
+
   factors.sort(function(a, b) { return Math.abs(b.amount) - Math.abs(a.amount); });
   return { rank: rank, topReasons: factors.slice(0, 3), allFactors: factors };
 }
@@ -602,6 +635,7 @@ function getVal(id) {
 }
 
 function getInputParams() {
+  var isRenting = document.getElementById('isRentingHome').checked;
   return {
     sales: getVal('sales'),
     expenses: getVal('expenses'),
@@ -611,6 +645,8 @@ function getInputParams() {
     corpMaintenanceCost: getVal('corpMaintenanceCost'),
     age: getVal('age'),
     isTaxableBusiness: document.getElementById('isTaxableBusiness').checked,
+    isRentingHome: isRenting,
+    monthlyRent: isRenting ? getVal('monthlyRent') : 0,
     nationalInsuranceManual: getVal('nationalInsuranceManual'),
     socialInsEmployeeManual: getVal('socialInsEmployeeManual'),
     socialInsEmployerManual: getVal('socialInsEmployerManual'),
@@ -688,6 +724,9 @@ function renderResults(personal, corporate, comp, judgement) {
     '<tr class="border-t"><td class="pr-4 py-1.5 pl-4">所得税</td><td class="text-right font-mono text-red-700">' + fmt(corporate.incomeTaxAfterTotal) + '</td></tr>' +
     '<tr><td class="pr-4 py-1.5 pl-4">住民税</td><td class="text-right font-mono text-red-700">' + fmt(corporate.residentTaxAfterTotal) + '</td></tr>' +
     '<tr><td class="pr-4 py-1.5 pl-4">社会保険（本人負担）</td><td class="text-right font-mono text-red-700">' + fmt(corporate.socialInsEmployee) + '</td></tr>' +
+    (corporate.personalRentSaving > 0
+      ? '<tr class="bg-green-50"><td class="pr-4 py-1.5 pl-4">役員社宅制度による実質手取り増</td><td class="text-right font-mono text-green-700">+' + fmt(corporate.personalRentSaving) + '</td></tr>'
+      : '') +
     '<tr class="border-t-2 border-slate-400 font-bold text-lg"><td class="pr-4 py-2">個人の手取り</td><td class="text-right font-mono text-blue-700">' + fmt(corporate.personalTakehomeAfter) + '</td></tr>';
 
   document.getElementById('tblCorporateCorp').innerHTML =
@@ -695,6 +734,9 @@ function renderResults(personal, corporate, comp, judgement) {
     '<tr><td class="pr-4 py-1.5 pl-4">役員報酬</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.directorSalaryAnnual) + '</td></tr>' +
     '<tr><td class="pr-4 py-1.5 pl-4">法人維持コスト</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.corpMaintenanceCost) + '</td></tr>' +
     '<tr><td class="pr-4 py-1.5 pl-4">社会保険（会社負担）</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.socialInsEmployer) + '</td></tr>' +
+    (corporate.companyRentExpense > 0
+      ? '<tr class="bg-green-50"><td class="pr-4 py-1.5 pl-4">役員社宅（法人負担分）</td><td class="text-right font-mono text-red-700">-' + fmt(corporate.companyRentExpense) + '</td></tr>'
+      : '') +
     '<tr class="border-t font-semibold"><td class="pr-4 py-1.5">税引前利益</td><td class="text-right font-mono">' + fmt(corporate.profitBeforeTax) + '</td></tr>' +
     '<tr class="border-t bg-slate-50"><td colspan="2" class="pr-4 py-2 font-semibold text-slate-700">法人税等 内訳</td></tr>' +
     '<tr><td class="pr-4 py-1.5 pl-4">法人税（国税）</td><td class="text-right font-mono text-red-700">' + fmt(cb.corpTax) + '</td></tr>' +
@@ -755,6 +797,16 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   }
+
+  document.getElementById('isRentingHome').addEventListener('change', function() {
+    var area = document.getElementById('rentInputArea');
+    if (this.checked) {
+      area.classList.remove('hidden');
+    } else {
+      area.classList.add('hidden');
+      document.getElementById('monthlyRent').value = '';
+    }
+  });
 
   document.getElementById('calcBtn').addEventListener('click', calculate);
 });
